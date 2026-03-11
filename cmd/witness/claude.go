@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 
 	"github.com/dshills/witness/internal/app"
+	"github.com/dshills/witness/internal/claudehooks"
 	"github.com/dshills/witness/internal/config"
+	"github.com/dshills/witness/internal/events"
 	"github.com/dshills/witness/internal/git"
 	"github.com/dshills/witness/internal/store/fsstore"
 	"github.com/spf13/cobra"
@@ -15,9 +17,10 @@ import (
 
 func newClaudeCmd() *cobra.Command {
 	var (
-		name   string
-		noGit  bool
-		resume bool
+		name    string
+		noGit   bool
+		noHooks bool
+		resume  bool
 	)
 
 	cmd := &cobra.Command{
@@ -28,11 +31,15 @@ for agentic coding sessions. Stdin is always connected, the run is
 auto-named from the current repo and branch, and alert thresholds
 are tuned for longer thinking times.
 
+Claude Code hooks are automatically configured to capture tool usage,
+subagent activity, and user prompts in real time.
+
 Examples:
   witness claude
   witness claude --name "refactor auth"
   witness claude -- --model sonnet
-  witness claude --resume`,
+  witness claude --resume
+  witness claude --no-hooks`,
 		DisableFlagParsing: false,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := config.FromContext(cmd.Context())
@@ -63,6 +70,19 @@ Examples:
 				NoGit:       noGit,
 			}
 
+			// Wire up Claude Code hooks unless disabled.
+			if !noHooks {
+				opts.HookServerStart = func(sink events.EventSink, runID string) (app.HookServer, error) {
+					return claudehooks.NewServer(sink, runID)
+				}
+				opts.CommandModifier = func(command []string, hookAddr string) []string {
+					// Create a temporary hook server to generate settings.
+					// We can't use the real server here since we only have the addr.
+					settings := claudehooks.HooksSettingsForAddr(hookAddr)
+					return append(command, "--settings", settings)
+				}
+			}
+
 			exitCode, err := app.RunSubprocess(cmd.Context(), cfg, st, command, opts)
 			if err != nil {
 				return err
@@ -76,6 +96,7 @@ Examples:
 
 	cmd.Flags().StringVar(&name, "name", "", "run name (default: auto from repo/branch)")
 	cmd.Flags().BoolVar(&noGit, "no-git", false, "disable git observation")
+	cmd.Flags().BoolVar(&noHooks, "no-hooks", false, "disable Claude Code hooks integration")
 	cmd.Flags().BoolVar(&resume, "resume", false, "resume the most recent Claude conversation")
 
 	return cmd

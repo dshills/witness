@@ -30,12 +30,32 @@ const (
 	signalDeadline = 10 * time.Second
 )
 
+// HookServerStartFunc starts a hook HTTP server for the given sink and runID.
+// It returns the server and an error. The runner calls this after the sink is
+// created but before the subprocess starts, and shuts it down at run end.
+type HookServerStartFunc func(sink events.EventSink, runID string) (HookServer, error)
+
+// HookServer is an interface for the Claude Code hook server lifecycle.
+type HookServer interface {
+	Addr() string
+	Shutdown(ctx context.Context) error
+}
+
 // RunOptions holds flags for the run command.
 type RunOptions struct {
 	Name        string
 	NoGit       bool
 	NoFiles     bool
 	Interactive bool
+
+	// HookServerStart, when set, starts a hook HTTP server that receives
+	// tool-use events from Claude Code hooks. The runner passes the
+	// server address to the subprocess via CommandModifier.
+	HookServerStart HookServerStartFunc
+
+	// CommandModifier is called after the hook server is started to allow
+	// the caller to inject CLI flags (e.g., --settings) into the command.
+	CommandModifier func(command []string, hookAddr string) []string
 }
 
 // RunSubprocess creates a run, starts the subprocess, and orchestrates
@@ -95,6 +115,25 @@ func RunSubprocess(ctx context.Context, cfg *config.Config, st store.Store, comm
 		"user":        user,
 	})
 	emitEvent(ctx, sink, runID, events.EventRunCreated, createdPayload)
+
+	// Start hook server if configured.
+	var hookServer HookServer
+	if opts.HookServerStart != nil {
+		var hookErr error
+		hookServer, hookErr = opts.HookServerStart(sink, runID)
+		if hookErr != nil {
+			log.Printf("witness: hook server failed to start: %v", hookErr)
+		} else if opts.CommandModifier != nil {
+			command = opts.CommandModifier(command, hookServer.Addr())
+		}
+	}
+	defer func() {
+		if hookServer != nil {
+			shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = hookServer.Shutdown(shutCtx)
+		}
+	}()
 
 	// Detect git root.
 	var repoRoot string
@@ -254,8 +293,6 @@ func RunSubprocess(ctx context.Context, cfg *config.Config, st store.Store, comm
 		sink.SaveFinalSnapshot(context.Background())
 
 		snap := agg.Snapshot()
-		// Restore terminal before printing summary.
-		restoreStdin()
 		fmt.Fprintf(os.Stderr, "\nwitness: run %s %s (%d events)\n", runID, run.Status, snap.EventCount)
 		return exitCode, nil
 	}
