@@ -31,6 +31,7 @@ func main() {
 	}
 
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(newRunCmd())
 	rootCmd.AddCommand(newRunsCmd())
 	rootCmd.AddCommand(newInspectCmd())
 	rootCmd.AddCommand(newStatsCmd())
