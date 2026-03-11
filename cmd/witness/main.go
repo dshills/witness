@@ -41,6 +41,7 @@ func main() {
 	rootCmd.AddCommand(newReplayCmd())
 	rootCmd.AddCommand(newWatchCmd())
 	rootCmd.AddCommand(newAttachCmd())
+	rootCmd.AddCommand(newWrapCmd())
 
 	// Pre-run: load config (available to all subcommands via closure)
 	rootCmd.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {

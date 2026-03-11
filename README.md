@@ -31,6 +31,12 @@ witness run -- make build
 # Run with a name and disable git polling
 witness run --name "deploy staging" --no-git -- ./deploy.sh staging
 
+# Run an interactive command (stdin passthrough)
+witness run -i --name "claude-session" -- claude
+
+# Pipe tool output through Witness without being the parent process
+prism review --json | witness wrap --name "code-review"
+
 # Open live dashboard for the most recent active run
 witness watch
 
@@ -49,6 +55,8 @@ witness export run_01JXXXXXX --format markdown
 | Command | Description |
 |---------|-------------|
 | `witness run -- <cmd>` | Run a command with live observation |
+| `witness run -i -- <cmd>` | Run an interactive command (stdin passthrough) |
+| `witness wrap` | Pipe stdin through Witness, capturing events |
 | `witness watch` | Open live TUI dashboard |
 | `witness attach --run <id>` | Attach TUI to an active run |
 | `witness replay <run-id>` | Replay a historical run |
@@ -66,14 +74,44 @@ witness export run_01JXXXXXX --format markdown
 witness run [flags] -- <command> [args...]
 
 Flags:
-  --name <string>    Human-readable run name
-  --no-git           Disable git observation
-  --no-files         Disable filesystem observation
+  -i, --interactive    Pass stdin to subprocess (for interactive commands)
+  --name <string>      Human-readable run name
+  --no-git             Disable git observation
+  --no-files           Disable filesystem observation
 ```
 
 Captures subprocess stdout/stderr (relayed to your terminal), monitors git for new commits and branch changes, watches the filesystem for file modifications, and detects structured tool output on stdout.
 
+Use `-i` for interactive commands like `claude`, `python`, or any REPL that needs keyboard input:
+
+```bash
+witness run -i --name "claude-session" -- claude
+```
+
 Signal handling: SIGINT and SIGTERM are forwarded to the subprocess process group. If the process doesn't exit within 10 seconds, the group is killed.
+
+### `witness wrap`
+
+```
+witness wrap [flags]
+
+Flags:
+  --run <id>        Attach to an existing run ID
+  --name <string>   Create a new run with this name
+```
+
+A lightweight pipe that reads stdin, passes it through to stdout, and captures any Witness events or structured tool results found in the stream. Use this when Witness shouldn't be the parent process:
+
+```bash
+# Capture tool output into an existing run
+prism review --json | witness wrap --run run_01J...
+
+# Create a new run from piped output
+golangci-lint run ./... 2>&1 | witness wrap --name "lint"
+
+# Chain multiple tools
+make build 2>&1 | witness wrap --name "build" | tee build.log
+```
 
 ### `witness watch` / `witness attach`
 

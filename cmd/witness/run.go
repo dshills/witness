@@ -49,6 +49,7 @@ Example:
 	}
 
 	cmd.Flags().StringVar(&opts.Name, "name", "", "human-readable run name")
+	cmd.Flags().BoolVarP(&opts.Interactive, "interactive", "i", false, "pass stdin to subprocess (for interactive commands)")
 	cmd.Flags().BoolVar(&opts.NoGit, "no-git", false, "disable git observation")
 	cmd.Flags().BoolVar(&opts.NoFiles, "no-files", false, "disable file system observation")
 

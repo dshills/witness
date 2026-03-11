@@ -32,9 +32,10 @@ const (
 
 // RunOptions holds flags for the run command.
 type RunOptions struct {
-	Name    string
-	NoGit   bool
-	NoFiles bool
+	Name        string
+	NoGit       bool
+	NoFiles     bool
+	Interactive bool
 }
 
 // RunSubprocess creates a run, starts the subprocess, and orchestrates
@@ -149,6 +150,11 @@ func RunSubprocess(ctx context.Context, cfg *config.Config, st store.Store, comm
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = wd
 	setProcGroup(cmd)
+
+	// Interactive mode: connect stdin directly to the subprocess.
+	if opts.Interactive {
+		cmd.Stdin = os.Stdin
+	}
 
 	// Stdout: tee to terminal and ingest scanner.
 	stdoutPipe, err := cmd.StdoutPipe()
