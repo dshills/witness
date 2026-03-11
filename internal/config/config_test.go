@@ -8,7 +8,10 @@ import (
 )
 
 func TestDefaultConfig(t *testing.T) {
-	cfg := DefaultConfig()
+	cfg, err := DefaultConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if cfg.Storage.Root == "" {
 		t.Error("Storage.Root should not be empty")
 	}
@@ -111,7 +114,10 @@ alerts:
 }
 
 func TestApplyEnv(t *testing.T) {
-	cfg := DefaultConfig()
+	cfg, err := DefaultConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Setenv("WITNESS_STORAGE_ROOT", "/env/path")
 	t.Setenv("WITNESS_UI_REFRESH_MS", "100")

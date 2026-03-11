@@ -78,7 +78,10 @@ type CaptureConfig struct {
 // Load reads a YAML config file and merges it over defaults.
 // If the file does not exist, defaults are returned.
 func Load(path string) (*Config, error) {
-	cfg := DefaultConfig()
+	cfg, err := DefaultConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -107,16 +110,22 @@ func ApplyEnv(cfg *Config) {
 	if v := os.Getenv("WITNESS_UI_REFRESH_MS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			cfg.UI.RefreshMS = n
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: WITNESS_UI_REFRESH_MS=%q is not a valid integer, ignored\n", v)
 		}
 	}
 	if v := os.Getenv("WITNESS_STALL_DURATION"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			cfg.Alerts.StallDuration = d
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: WITNESS_STALL_DURATION=%q is not a valid duration, ignored\n", v)
 		}
 	}
 	if v := os.Getenv("WITNESS_MAX_RUN_COST_USD"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			cfg.Alerts.MaxRunCostUSD = f
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: WITNESS_MAX_RUN_COST_USD=%q is not a valid number, ignored\n", v)
 		}
 	}
 }

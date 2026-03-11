@@ -1,14 +1,18 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 )
 
 // DefaultConfig returns the default configuration.
-func DefaultConfig() Config {
-	home, _ := os.UserHomeDir()
+func DefaultConfig() (Config, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return Config{}, fmt.Errorf("determining home directory: %w", err)
+	}
 	return Config{
 		Storage: StorageConfig{
 			Root: filepath.Join(home, ".witness"),
@@ -50,5 +54,5 @@ func DefaultConfig() Config {
 		Capture: CaptureConfig{
 			MaxOutputLines: 200,
 		},
-	}
+	}, nil
 }

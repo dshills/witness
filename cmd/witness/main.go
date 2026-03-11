@@ -23,6 +23,8 @@ func main() {
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
+		// Skip config loading for version command
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error { return nil },
 		Run: func(_ *cobra.Command, _ []string) {
 			fmt.Println("witness " + version.String())
 		},

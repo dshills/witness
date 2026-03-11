@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 )
 
 // ValidationError contains all validation violations for an event.
@@ -28,7 +27,7 @@ func Validate(evt Event) error {
 	} else if evt.SchemaVersion != SchemaVersion {
 		violations = append(violations, fmt.Sprintf("unknown schema_version: %q", evt.SchemaVersion))
 	}
-	if evt.Timestamp.IsZero() || evt.Timestamp.Equal(time.Time{}) {
+	if evt.Timestamp.IsZero() {
 		violations = append(violations, "timestamp is required")
 	}
 	if evt.RunID == "" {
