@@ -104,7 +104,7 @@ func TestStoreSink_Append500_TriggersSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sink := NewStoreSink(st, runID, agg, redactor)
+	sink := NewStoreSink(st, runID, agg, redactor, nil)
 	ctx := context.Background()
 
 	// Append 500 events.
@@ -143,7 +143,7 @@ func TestStoreSink_Redaction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sink := NewStoreSink(st, runID, agg, redactor)
+	sink := NewStoreSink(st, runID, agg, redactor, nil)
 	ctx := context.Background()
 
 	payload, _ := json.Marshal(map[string]string{

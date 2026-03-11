@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dshills/witness/internal/aggregate"
+	"github.com/dshills/witness/internal/alerts"
 	"github.com/dshills/witness/internal/config"
 	"github.com/dshills/witness/internal/events"
 	"github.com/dshills/witness/internal/files"
@@ -78,7 +79,11 @@ func RunSubprocess(ctx context.Context, cfg *config.Config, st store.Store, comm
 		return 1, fmt.Errorf("creating redactor: %w", err)
 	}
 
-	sink := NewStoreSink(st, runID, agg, redactor)
+	// Create alert engine for anomaly detection.
+	alertEngine := alerts.NewEngine(cfg.Alerts)
+	alertEngine.RegisterDefaultRules()
+
+	sink := NewStoreSink(st, runID, agg, redactor, alertEngine)
 
 	// Emit run.created.
 	createdPayload, _ := json.Marshal(map[string]any{

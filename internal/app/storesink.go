@@ -9,12 +9,19 @@ import (
 
 	"github.com/dshills/witness/internal/aggregate"
 	"github.com/dshills/witness/internal/events"
+	"github.com/dshills/witness/internal/models"
 	"github.com/dshills/witness/internal/privacy"
 	"github.com/dshills/witness/internal/store"
 )
 
 // snapshotInterval is the number of events between automatic snapshots.
 const snapshotInterval = 500
+
+// AlertHook is an optional interface for alert evaluation after each event.
+// When nil, no alert evaluation occurs.
+type AlertHook interface {
+	Evaluate(state aggregate.RunState) []models.Alert
+}
 
 // StoreSink bridges observers and the store. It validates, redacts, persists,
 // and aggregates each event. Every 500 events it saves a snapshot.
@@ -23,6 +30,7 @@ type StoreSink struct {
 	runID      string
 	aggregator *aggregate.Aggregator
 	redactor   *privacy.Redactor
+	alertHook  AlertHook
 	mu         sync.Mutex
 	count      int64
 }
@@ -31,12 +39,14 @@ type StoreSink struct {
 var _ events.EventSink = (*StoreSink)(nil)
 
 // NewStoreSink creates a StoreSink for the given run.
-func NewStoreSink(s store.Store, runID string, agg *aggregate.Aggregator, redactor *privacy.Redactor) *StoreSink {
+// The alertHook parameter is optional (nil disables alert evaluation).
+func NewStoreSink(s store.Store, runID string, agg *aggregate.Aggregator, redactor *privacy.Redactor, alertHook AlertHook) *StoreSink {
 	return &StoreSink{
 		store:      s,
 		runID:      runID,
 		aggregator: agg,
 		redactor:   redactor,
+		alertHook:  alertHook,
 	}
 }
 
@@ -63,7 +73,23 @@ func (s *StoreSink) Append(ctx context.Context, evt events.Event) error {
 		log.Printf("storesink: aggregator error: %v", err)
 	}
 
-	// 5. Periodic snapshot
+	// 5. Evaluate alert rules (if configured)
+	if s.alertHook != nil && evt.Type != events.EventAlertRaised && evt.Type != events.EventAlertCleared {
+		snap := s.aggregator.Snapshot()
+		newAlerts := s.alertHook.Evaluate(snap)
+		for _, a := range newAlerts {
+			alertEvt := makeAlertEvent(s.runID, a)
+			// Persist and aggregate the alert event (no recursion: guarded by type check above).
+			if persistErr := s.store.AppendEvent(ctx, s.runID, alertEvt); persistErr != nil {
+				log.Printf("storesink: persisting alert event: %v", persistErr)
+			}
+			if applyErr := s.aggregator.Apply(alertEvt); applyErr != nil {
+				log.Printf("storesink: aggregator alert error: %v", applyErr)
+			}
+		}
+	}
+
+	// 6. Periodic snapshot
 	s.mu.Lock()
 	s.count++
 	count := s.count
@@ -99,6 +125,20 @@ func (s *StoreSink) saveSnapshot(ctx context.Context) {
 // SaveFinalSnapshot saves the final snapshot. Called at run end.
 func (s *StoreSink) SaveFinalSnapshot(ctx context.Context) {
 	s.saveSnapshot(ctx)
+}
+
+// makeAlertEvent creates an alert.raised event from an Alert model.
+func makeAlertEvent(runID string, a models.Alert) events.Event {
+	payload, _ := json.Marshal(map[string]any{
+		"alert_id":    a.AlertID,
+		"severity":    a.Severity,
+		"type":        a.Type,
+		"title":       a.Title,
+		"description": a.Description,
+		"related_ids": a.RelatedIDs,
+		"metadata":    a.Metadata,
+	})
+	return events.NewEvent(runID, events.EventAlertRaised, "alerts.engine", payload)
 }
 
 // redactPayloadStrings redacts string values in a JSON payload.
