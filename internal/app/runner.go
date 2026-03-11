@@ -149,10 +149,121 @@ func RunSubprocess(ctx context.Context, cfg *config.Config, st store.Store, comm
 	// Build subprocess command.
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = wd
+
+	// Pipe for feeding output to the ingest scanner.
+	pr, pw := io.Pipe()
+
+	usePTY := opts.Interactive && isTerminal(os.Stdin)
+
+	if usePTY {
+		// PTY path: child sees a real terminal.
+		restoreStdin, err := setupRawStdin()
+		if err != nil {
+			obsCancel()
+			wg.Wait()
+			return 1, fmt.Errorf("setting raw mode: %w", err)
+		}
+		defer restoreStdin()
+
+		ptmx, err := startPTY(cmd)
+		if err != nil {
+			obsCancel()
+			wg.Wait()
+			emitRunFailed(ctx, sink, runID, err)
+			updateRunStatus(ctx, st, run, models.RunStatusFailed)
+			fmt.Fprintf(os.Stderr, "witness: run %s failed (%v)\n", runID, err)
+			return 1, nil
+		}
+		defer func() { _ = ptmx.Close() }()
+
+		stopWinch := handleWinch(ptmx)
+		defer stopWinch()
+
+		// Emit run.started.
+		emitEvent(ctx, sink, runID, events.EventRunStarted, json.RawMessage(`{}`))
+		run.Status = models.RunStatusRunning
+		_ = st.UpdateRun(ctx, run)
+
+		// Signal handling — with a PTY, Ctrl+C goes through the terminal
+		// naturally, but we still catch SIGTERM for graceful shutdown.
+		sigCh := make(chan os.Signal, 2)
+		signal.Notify(sigCh, syscall.SIGTERM)
+
+		// Relay PTY I/O (stdin→child, child→stdout+ingest).
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { _ = pw.Close() }()
+			relayPTY(ptmx, pw)
+		}()
+
+		// Ingest scanner.
+		sc := ingest.NewScanner(pr, sink, runID)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = sc.Scan(obsCtx)
+		}()
+
+		// Wait for subprocess or signal.
+		exitCode := 0
+		waitDone := make(chan error, 1)
+		go func() { waitDone <- cmd.Wait() }()
+
+		cancelled := false
+		select {
+		case err := <-waitDone:
+			if err != nil {
+				if exitErr, ok := err.(*exec.ExitError); ok {
+					exitCode = exitErr.ExitCode()
+				} else {
+					exitCode = 1
+				}
+			}
+		case sig := <-sigCh:
+			cancelled = true
+			_ = cmd.Process.Signal(sig)
+
+			deadline := time.NewTimer(signalDeadline)
+			select {
+			case <-waitDone:
+				deadline.Stop()
+			case <-deadline.C:
+				_ = cmd.Process.Kill()
+				<-waitDone
+			}
+			exitCode = 130
+		}
+
+		signal.Stop(sigCh)
+		obsCancel()
+
+		if cancelled {
+			emitEvent(ctx, sink, runID, events.EventRunCancelled, json.RawMessage(`{}`))
+			updateRunStatus(ctx, st, run, models.RunStatusCancelled)
+		} else if exitCode == 0 {
+			emitEvent(ctx, sink, runID, events.EventRunCompleted, json.RawMessage(`{}`))
+			updateRunStatus(ctx, st, run, models.RunStatusCompleted)
+		} else {
+			payload, _ := json.Marshal(map[string]int{"exit_code": exitCode})
+			emitEvent(ctx, sink, runID, events.EventRunFailed, payload)
+			updateRunStatus(ctx, st, run, models.RunStatusFailed)
+		}
+
+		wg.Wait()
+		sink.SaveFinalSnapshot(context.Background())
+
+		snap := agg.Snapshot()
+		// Restore terminal before printing summary.
+		restoreStdin()
+		fmt.Fprintf(os.Stderr, "\nwitness: run %s %s (%d events)\n", runID, run.Status, snap.EventCount)
+		return exitCode, nil
+	}
+
+	// Pipe path: standard non-interactive subprocess.
 	setProcGroup(cmd)
 
-	// Connect stdin to the subprocess if interactive flag is set or stdin is a terminal.
-	if opts.Interactive || isTerminal(os.Stdin) {
+	if isTerminal(os.Stdin) {
 		cmd.Stdin = os.Stdin
 	}
 
@@ -164,8 +275,6 @@ func RunSubprocess(ctx context.Context, cfg *config.Config, st store.Store, comm
 		return 1, fmt.Errorf("creating stdout pipe: %w", err)
 	}
 
-	// Use a pipe for feeding the scanner from the tee reader.
-	pr, pw := io.Pipe()
 	teeReader := io.TeeReader(stdoutPipe, pw)
 
 	// Stderr: pipe to relay.

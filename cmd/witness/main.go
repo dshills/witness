@@ -45,7 +45,7 @@ func main() {
 	rootCmd.AddCommand(newClaudeCmd())
 
 	// Pre-run: load config (available to all subcommands via closure)
-	rootCmd.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		if cfgFile == "" {
 			home, err := os.UserHomeDir()
 			if err != nil {
@@ -58,8 +58,8 @@ func main() {
 			return fmt.Errorf("loading config: %w", err)
 		}
 		config.ApplyEnv(cfg)
-		// Store config for subcommands that need it
-		rootCmd.SetContext(config.WithConfig(rootCmd.Context(), cfg))
+		// Store config on the executing command so subcommands see it
+		cmd.SetContext(config.WithConfig(cmd.Context(), cfg))
 		return nil
 	}
 
