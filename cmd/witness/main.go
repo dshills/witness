@@ -42,6 +42,7 @@ func main() {
 	rootCmd.AddCommand(newWatchCmd())
 	rootCmd.AddCommand(newAttachCmd())
 	rootCmd.AddCommand(newWrapCmd())
+	rootCmd.AddCommand(newClaudeCmd())
 
 	// Pre-run: load config (available to all subcommands via closure)
 	rootCmd.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {

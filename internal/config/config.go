@@ -130,6 +130,26 @@ func ApplyEnv(cfg *Config) {
 	}
 }
 
+// ApplyAgenticDefaults adjusts config thresholds for agentic coding sessions
+// (e.g., Claude Code) where longer thinking times and higher costs are normal.
+func ApplyAgenticDefaults(cfg *Config) {
+	// Agents think longer — stall at 30min not 10min.
+	if cfg.Alerts.StallDuration <= 10*time.Minute {
+		cfg.Alerts.StallDuration = 30 * time.Minute
+	}
+	// Agentic sessions use more tokens and cost more.
+	if cfg.Alerts.MaxRunCostUSD <= 25.00 {
+		cfg.Alerts.MaxRunCostUSD = 100.00
+	}
+	if cfg.Alerts.MaxStageCostUSD <= 8.00 {
+		cfg.Alerts.MaxStageCostUSD = 25.00
+	}
+	// Wider loop window — agents legitimately retry more.
+	if cfg.Alerts.LoopWindow <= 8 {
+		cfg.Alerts.LoopWindow = 15
+	}
+}
+
 // Validate checks the config for obviously bad values.
 func (c *Config) Validate() error {
 	if c.Alerts.StallDuration > 0 && c.Alerts.StallDuration < time.Second {

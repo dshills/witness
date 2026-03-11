@@ -1,8 +1,27 @@
 # Witness
 
-Terminal-first observability platform for AI-driven software development workflows.
+Flight recorder for AI coding sessions. Observe what Claude Code (or any agentic tool) does in real time — tool calls, model costs, file changes, git activity, stalls, loops — via a live terminal dashboard or replayable timeline.
 
-Witness wraps any command, captures what happens — tool calls, model requests, file changes, git activity, cost accumulation — and presents it as a live dashboard or replayable timeline. Think of it as flight-recorder meets `htop` for agentic coding sessions.
+## Quick Start with Claude Code
+
+```bash
+# Observe a Claude Code session (stdin auto-connected)
+witness claude
+
+# Name the session for easy lookup later
+witness claude --name "refactor auth module"
+
+# Resume the last Claude conversation
+witness claude --resume
+
+# Pass extra flags to Claude
+witness claude -- --model sonnet
+
+# In another terminal, watch the live dashboard
+witness watch
+```
+
+That's it. Witness auto-detects your repo and branch, names the run accordingly, and tunes alert thresholds for agentic sessions (longer stall timeout, higher cost limits, wider loop window).
 
 ## Install
 
@@ -22,51 +41,49 @@ go build -ldflags \
 
 Requires Go 1.26+.
 
-## Quick Start
+## What It Captures
 
-```bash
-# Run a command under observation
-witness run -- make build
+When Claude Code (or any subprocess) runs under Witness:
 
-# Run with a name and disable git polling
-witness run --name "deploy staging" --no-git -- ./deploy.sh staging
-
-# Run an interactive command (stdin passthrough)
-witness run -i --name "claude-session" -- claude
-
-# Pipe tool output through Witness without being the parent process
-prism review --json | witness wrap --name "code-review"
-
-# Open live dashboard for the most recent active run
-witness watch
-
-# List past runs
-witness runs
-
-# Replay a historical run in the TUI
-witness replay run_01JXXXXXX
-
-# Export a run as Markdown
-witness export run_01JXXXXXX --format markdown
-```
+- **Tool calls** — parsed from structured JSON output on stdout
+- **Model usage** — tokens, cost, provider, latency
+- **Git activity** — commits, branch changes, dirty file count
+- **File changes** — created, modified, deleted (with debounce)
+- **Alerts** — stalls, loops, budget overruns, retry storms, failure clusters
+- **Everything** — as an append-only event log you can replay and export
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `witness run -- <cmd>` | Run a command with live observation |
-| `witness run -i -- <cmd>` | Run an interactive command (stdin passthrough) |
+| `witness claude` | Observe a Claude Code session (recommended) |
+| `witness run -- <cmd>` | Observe any command |
 | `witness wrap` | Pipe stdin through Witness, capturing events |
-| `witness watch` | Open live TUI dashboard |
+| `witness watch` | Live TUI dashboard |
 | `witness attach --run <id>` | Attach TUI to an active run |
 | `witness replay <run-id>` | Replay a historical run |
 | `witness runs` | List recorded runs |
-| `witness inspect <run-id>` | Print detailed run summary |
-| `witness stats <run-id>` | Print aggregated metrics |
-| `witness export <run-id>` | Export run data (JSON, NDJSON, Markdown) |
-| `witness doctor` | Check system health |
-| `witness config show` | Display effective configuration |
-| `witness version` | Print version info |
+| `witness inspect <run-id>` | Detailed run summary |
+| `witness stats <run-id>` | Aggregated metrics |
+| `witness export <run-id>` | Export (JSON, NDJSON, Markdown) |
+| `witness doctor` | System health check |
+| `witness config show` | Show effective config |
+
+### `witness claude`
+
+```
+witness claude [flags] [-- extra-args...]
+
+Flags:
+  --name <string>   Run name (default: auto from repo/branch)
+  --resume           Resume last Claude conversation
+  --no-git           Disable git observation
+```
+
+Purpose-built for Claude Code. Automatically:
+- Connects stdin (interactive mode)
+- Names the run from your repo and branch (e.g., `witness/main`)
+- Applies agentic defaults: 30min stall threshold, $100 cost limit, wider loop window
 
 ### `witness run`
 
@@ -74,21 +91,19 @@ witness export run_01JXXXXXX --format markdown
 witness run [flags] -- <command> [args...]
 
 Flags:
-  -i, --interactive    Pass stdin to subprocess (for interactive commands)
+  -i, --interactive    Force stdin passthrough (auto-detected for terminals)
   --name <string>      Human-readable run name
   --no-git             Disable git observation
   --no-files           Disable filesystem observation
 ```
 
-Captures subprocess stdout/stderr (relayed to your terminal), monitors git for new commits and branch changes, watches the filesystem for file modifications, and detects structured tool output on stdout.
-
-Use `-i` for interactive commands like `claude`, `python`, or any REPL that needs keyboard input:
+General-purpose command observer. Stdin is auto-connected when running from a terminal — no `-i` needed for interactive commands:
 
 ```bash
-witness run -i --name "claude-session" -- claude
+witness run -- make build
+witness run --name "deploy" -- ./deploy.sh staging
+witness run -- python -i           # stdin auto-connected
 ```
-
-Signal handling: SIGINT and SIGTERM are forwarded to the subprocess process group. If the process doesn't exit within 10 seconds, the group is killed.
 
 ### `witness wrap`
 
@@ -96,21 +111,15 @@ Signal handling: SIGINT and SIGTERM are forwarded to the subprocess process grou
 witness wrap [flags]
 
 Flags:
-  --run <id>        Attach to an existing run ID
-  --name <string>   Create a new run with this name
+  --run <id>        Attach to an existing run
+  --name <string>   Create a new run
 ```
 
-A lightweight pipe that reads stdin, passes it through to stdout, and captures any Witness events or structured tool results found in the stream. Use this when Witness shouldn't be the parent process:
+Lightweight stdin/stdout pipe. Captures events without being the parent process:
 
 ```bash
-# Capture tool output into an existing run
-prism review --json | witness wrap --run run_01J...
-
-# Create a new run from piped output
-golangci-lint run ./... 2>&1 | witness wrap --name "lint"
-
-# Chain multiple tools
-make build 2>&1 | witness wrap --name "build" | tee build.log
+prism review --json | witness wrap --name "code-review"
+golangci-lint run ./... 2>&1 | witness wrap --run run_01J...
 ```
 
 ### `witness watch` / `witness attach`
@@ -120,7 +129,7 @@ witness watch [--run <id|latest>]
 witness attach --run <run-id>
 ```
 
-Opens a Bubble Tea TUI with 7 panels: header, stages, active work, token/cost, git/files, alerts, and event stream. `attach` requires the run to be active.
+Opens the live TUI. `watch` finds the most recent active run. `attach` requires the run to be active.
 
 ### `witness replay`
 
@@ -128,71 +137,35 @@ Opens a Bubble Tea TUI with 7 panels: header, stages, active work, token/cost, g
 witness replay <run-id> [flags]
 
 Flags:
-  --speed <float>    Playback speed (default: 1.0 in TUI, 0 = instant)
-  --summary          Print postmortem summary only
-  --text             Text-based timeline (no TUI)
+  --speed <float>    Playback speed (default 1.0 = real time)
+  --summary          Print postmortem only
+  --text             Text timeline (no TUI)
 ```
 
-Default opens the TUI in replay mode with playback controls:
-
-| Key | Action |
-|-----|--------|
-| `space` | Play/pause |
-| `right`/`l` | Step forward |
-| `left`/`h` | Step backward |
-| `>`/`.` | Increase speed |
-| `<`/`,` | Decrease speed |
-| `n`/`N` | Next/previous stage transition |
-| `c`/`C` | Next/previous commit |
-| `A` | Next alert |
-
-### `witness runs`
-
-```
-witness runs [--status <filter>] [--limit <n>]
-```
-
-### `witness export`
-
-```
-witness export <run-id> [--format json|ndjson|markdown] [--output <file>]
-```
+Replay keys: `space` play/pause, `left`/`right` step, `<`/`>` speed, `n`/`N` stage, `c`/`C` commit, `A` alert.
 
 ## TUI Dashboard
 
-The live dashboard updates at 500ms intervals (configurable) and adapts to terminal size:
+Seven panels updating at 500ms, with two-column layout on wide terminals:
 
-**Full layout** (100+ columns):
 ```
-┌─────────────── Header ───────────────────┐
-├──────────────┬───────────────────────────┤
-│ Stages       │ Active Tool/Model         │
-├──────────────┤───────────────────────────┤
-│ Tokens/Cost  │ Git/Files                 │
-├──────────────┴───────────────────────────┤
-│ Alerts                                   │
-├──────────────────────────────────────────┤
-│ Event Stream                             │
-└──────────────────────────────────────────┘
++----------------- Header ------------------+
++-----------+---------+---------------------+
+| Stages    | Active Tool/Model             |
++-----------+-------------------------------+
+| Tokens/$  | Git/Files                     |
++-----------+-------------------------------+
+| Alerts                                    |
++-------------------------------------------+
+| Event Stream                              |
++-------------------------------------------+
 ```
 
-**Compact layout** (<100 columns): single-column stacked panels.
-
-**Keyboard shortcuts:**
-
-| Key | Action |
-|-----|--------|
-| `q` / `Ctrl-C` | Quit |
-| `Tab` / `Shift-Tab` | Cycle panel focus |
-| `j`/`k` | Scroll in focused panel |
-| `p` / `r` | Pause / resume event stream |
-| `/` | Filter event stream |
-| `?` | Toggle help overlay |
-| `s`/`t`/`g`/`a`/`e`/`m` | Drill-down views |
+Keys: `q` quit, `Tab` focus, `j`/`k` scroll, `p`/`r` pause/resume, `/` filter, `?` help, `s`/`t`/`g`/`a`/`e`/`m` drill-down.
 
 ## Configuration
 
-Witness loads config from `~/.witness/config.yaml`, with environment variable overrides.
+Config file: `~/.witness/config.yaml`
 
 ```yaml
 storage:
@@ -200,32 +173,26 @@ storage:
 
 ui:
   refresh_ms: 500
-  theme: auto                    # auto, light, dark
+  theme: auto
 
 alerts:
-  stall_duration: 10m
-  loop_window: 8
-  max_run_cost_usd: 25.00
-  max_stage_cost_usd: 8.00
-  # max_tokens: 1000000          # optional token limit
+  stall_duration: 10m            # witness claude uses 30m
+  loop_window: 8                 # witness claude uses 15
+  max_run_cost_usd: 25.00       # witness claude uses 100.00
+  max_stage_cost_usd: 8.00      # witness claude uses 25.00
 
 files:
   ignore:
     - ".git/**"
     - "node_modules/**"
     - "vendor/**"
-    - "dist/**"
-    - "build/**"
-    - ".next/**"
     - "*.swp"
-    - "*~"
     - ".DS_Store"
 
 privacy:
   redact_patterns:
     - '(?i)(sk-[a-zA-Z0-9]{20,}|AKIA[A-Z0-9]{16})'
     - '(?i)bearer\s+[A-Za-z0-9\-._~+/=]{20,}'
-    - '(?i)(password|secret|apikey)\s*[=:]\s*\S{8,}'
 
 git:
   poll_interval_seconds: 5
@@ -238,145 +205,104 @@ pricing:
       output_per_m_token: 15.00
 ```
 
-**Environment overrides:**
+Environment overrides: `WITNESS_STORAGE_ROOT`, `WITNESS_UI_REFRESH_MS`, `WITNESS_STALL_DURATION`, `WITNESS_MAX_RUN_COST_USD`.
 
-| Variable | Config path |
-|----------|-------------|
-| `WITNESS_STORAGE_ROOT` | `storage.root` |
-| `WITNESS_UI_REFRESH_MS` | `ui.refresh_ms` |
-| `WITNESS_STALL_DURATION` | `alerts.stall_duration` |
-| `WITNESS_MAX_RUN_COST_USD` | `alerts.max_run_cost_usd` |
+## Claude Code Hooks Integration
+
+Claude Code supports hooks that fire on tool use. You can configure hooks to emit Witness events directly, without wrapping the process:
+
+```json
+// ~/.claude/hooks.json
+{
+  "hooks": {
+    "tool_use": {
+      "command": "witness wrap --run $WITNESS_RUN_ID"
+    }
+  }
+}
+```
+
+Or start a Witness run first and reference its ID:
+
+```bash
+# Start Claude under Witness
+witness claude
+
+# Or manually: start a run, export the ID, then use it in hooks
+export WITNESS_RUN_ID=$(witness run --name "session" -- echo "started" 2>&1 | grep -o 'run_[^ ]*')
+```
 
 ## Tool Integration
 
-Tools can integrate with Witness at three levels:
+Three levels, from zero effort to full control:
 
-### Level 0: No Integration
+**Level 0** — No integration. Witness captures stdout/stderr as-is.
 
-Witness captures stdout/stderr as-is. No structured events are generated.
-
-### Level 1: Structured Tool Result
-
-Emit a single JSON object on stdout with at minimum `tool` and `status`:
+**Level 1** — Emit structured JSON with `tool` + `status`:
 
 ```json
-{
-  "tool": "golangci-lint",
-  "status": "pass",
-  "summary": "0 issues found",
-  "findings": { "error": 0, "warning": 2 },
-  "duration_ms": 1500,
-  "tokens": { "input": 5000, "output": 1200 },
-  "model": "claude-sonnet-4-6",
-  "provider": "anthropic"
-}
+{"tool":"golangci-lint","status":"pass","summary":"0 issues","findings":{"warning":2},"duration_ms":1500}
 ```
 
-Witness automatically converts this into `tool.completed`, `model.request.completed`, and `finding.recorded` events.
+Witness auto-generates `tool.completed`, `model.request.completed`, and `finding.recorded` events.
 
-### Level 2: Native Events
+**Level 2** — Emit native Witness events (full `event_id`, `type`, `payload`). See [`docs/event-schema.md`](docs/event-schema.md).
 
-Emit full Witness event JSON on stdout:
-
-```json
-{
-  "event_id": "evt_01J...",
-  "schema_version": "1.0",
-  "timestamp": "2026-03-11T14:30:00Z",
-  "type": "tool.completed",
-  "source": "my-tool",
-  "payload": { "findings": { "error": 0 } },
-  "summary": "All checks passed"
-}
-```
-
-The `run_id` is overridden to match the current Witness run. Events must have both `event_id` and `type` to be recognized.
-
-See [`docs/event-schema.md`](docs/event-schema.md) for the complete event type reference.
-
-## Alert Heuristics
-
-Witness evaluates alert rules after every event:
+## Alerts
 
 | Rule | Trigger | Severity |
 |------|---------|----------|
-| **Stall** | No file or stage changes for `stall_duration` | warning |
-| **Loop** | Same tool repeated 75%+ of last `loop_window` invocations | warning |
-| **Budget** | Run cost exceeds `max_run_cost_usd` | error |
-| **Stage Budget** | Stage cost exceeds `max_stage_cost_usd` | warning |
-| **Retry Storm** | 5+ failures of same tool in last 10 invocations | warning |
-| **Failure Density** | 3+ failure events within 60 seconds | warning |
+| **Stall** | No activity for `stall_duration` | warning |
+| **Loop** | Same tool 75%+ of last `loop_window` calls | warning |
+| **Budget** | Cost exceeds `max_run_cost_usd` | error |
+| **Retry Storm** | 5+ same-tool failures in 10 calls | warning |
+| **Failure Density** | 3+ failures in 60 seconds | warning |
 
-Alerts are deduplicated — each alert type fires at most once per run.
+Deduplicated — each alert fires at most once per run.
 
 ## Storage
 
-All data is stored on the local filesystem:
-
 ```
-~/.witness/
-└── runs/
-    └── run_01JXXXXXX/
-        ├── run.json           # Run metadata
-        ├── events.ndjson      # Append-only event log
-        └── snapshot.json      # Cached aggregated state
+~/.witness/runs/<run-id>/
+  run.json          # metadata
+  events.ndjson     # append-only event log
+  snapshot.json     # cached state
 ```
 
-- **events.ndjson** — append-only, O_APPEND, synced after each write
-- **snapshot.json** — atomically replaced via temp file + rename
-- **Crash-tolerant** — malformed trailing lines are discarded on read
+Crash-tolerant: malformed trailing lines discarded, snapshots atomically replaced.
 
 ## Architecture
 
-```
-                    ┌──────────────┐
-                    │ witness run  │
-                    └──────┬───────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────┴─────┐ ┌───┴───┐ ┌─────┴─────┐
-        │ Git       │ │Stdout │ │ File      │
-        │ Observer  │ │Scanner│ │ Watcher   │
-        └─────┬─────┘ └───┬───┘ └─────┬─────┘
-              │            │            │
-              └────────────┼────────────┘
-                           │
-                    ┌──────┴───────┐
-                    │  StoreSink   │
-                    │  (validate,  │
-                    │   redact,    │
-                    │   persist,   │
-                    │   aggregate, │
-                    │   alert)     │
-                    └──────┬───────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────┴─────┐ ┌───┴───┐ ┌─────┴─────┐
-        │ FSStore   │ │ Agg   │ │  Alert    │
-        │ (NDJSON)  │ │       │ │  Engine   │
-        └───────────┘ └───┬───┘ └───────────┘
-                          │
-                    ┌─────┴──────┐
-                    │   TUI /    │
-                    │   Export   │
-                    └────────────┘
-```
+Event-sourced: append-only event log is the source of truth. State is derived by replaying events through the aggregator. Snapshots are periodic caches.
 
-Event-sourced design: the append-only event log is the source of truth. State is derived by replaying events through the aggregator. Snapshots are periodic caches for fast startup.
+```
+witness run/claude
+       |
+  +---------+----------+-----------+
+  |         |          |           |
+  Git    Stdout     File        Stdin
+  Poll   Scanner   Watcher   (interactive)
+  |         |          |
+  +----+----+----------+
+       |
+   StoreSink (validate -> redact -> persist -> aggregate -> alert)
+       |
+  +----+----+-------+
+  |         |       |
+FSStore   Agg    Alerts
+(NDJSON)    |
+         TUI / Export / Replay
+```
 
 ## Built-in Pricing
-
-Cost estimation is included for common models:
 
 | Provider | Models |
 |----------|--------|
 | Anthropic | claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5 |
 | OpenAI | gpt-4o, gpt-4o-mini, o1, o3, o3-mini, o4-mini |
 
-Override or extend via `pricing.models` in config. Unknown models return $0 cost with a logged warning.
+Override via `pricing.models` in config.
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).

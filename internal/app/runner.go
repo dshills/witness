@@ -151,8 +151,8 @@ func RunSubprocess(ctx context.Context, cfg *config.Config, st store.Store, comm
 	cmd.Dir = wd
 	setProcGroup(cmd)
 
-	// Interactive mode: connect stdin directly to the subprocess.
-	if opts.Interactive {
+	// Connect stdin to the subprocess if interactive flag is set or stdin is a terminal.
+	if opts.Interactive || isTerminal(os.Stdin) {
 		cmd.Stdin = os.Stdin
 	}
 
