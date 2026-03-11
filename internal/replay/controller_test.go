@@ -537,3 +537,101 @@ func TestUpdatesChannel(t *testing.T) {
 		t.Error("expected update on channel after StepForward")
 	}
 }
+
+func TestSpeed(t *testing.T) {
+	ctrl := NewController(testRun(), testEvents())
+
+	// Default speed is 1.0.
+	if got := ctrl.Speed(); got != 1.0 {
+		t.Errorf("initial Speed() = %v, want 1.0", got)
+	}
+
+	ctrl.SetSpeed(4.0)
+	if got := ctrl.Speed(); got != 4.0 {
+		t.Errorf("Speed() after SetSpeed(4) = %v, want 4.0", got)
+	}
+}
+
+func TestJumpToPrevCommit(t *testing.T) {
+	run := testRun()
+	evts := testEvents()
+	ctrl := NewController(run, evts)
+
+	// Advance to the end.
+	for range evts {
+		_, _ = ctrl.StepForward()
+	}
+
+	// Jump back to the commit event (index 7).
+	err := ctrl.JumpToPrevCommit()
+	if err != nil {
+		t.Fatalf("JumpToPrevCommit: %v", err)
+	}
+
+	current, _ := ctrl.Progress()
+	if current != 7 {
+		t.Errorf("current = %d, want 7", current)
+	}
+	evt := ctrl.CurrentEvent()
+	if evt.Type != events.EventGitCommitCreated {
+		t.Errorf("event type = %s, want %s", evt.Type, events.EventGitCommitCreated)
+	}
+}
+
+func TestJumpToPrevCommit_NoCommitBefore(t *testing.T) {
+	run := testRun()
+	evts := testEvents()
+	ctrl := NewController(run, evts)
+
+	// Advance to index 2 (before any commit).
+	for range 3 {
+		_, _ = ctrl.StepForward()
+	}
+
+	err := ctrl.JumpToPrevCommit()
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestJumpToPrevAlert(t *testing.T) {
+	run := testRun()
+	evts := testEvents()
+	ctrl := NewController(run, evts)
+
+	// Advance to the end.
+	for range evts {
+		_, _ = ctrl.StepForward()
+	}
+
+	// Jump back to the alert event (index 4).
+	err := ctrl.JumpToPrevAlert()
+	if err != nil {
+		t.Fatalf("JumpToPrevAlert: %v", err)
+	}
+
+	current, _ := ctrl.Progress()
+	if current != 4 {
+		t.Errorf("current = %d, want 4", current)
+	}
+	evt := ctrl.CurrentEvent()
+	if evt.Type != events.EventAlertRaised {
+		t.Errorf("event type = %s, want %s", evt.Type, events.EventAlertRaised)
+	}
+}
+
+func TestJumpToPrevAlert_NoAlertBefore(t *testing.T) {
+	run := testRun()
+	evts := testEvents()
+	ctrl := NewController(run, evts)
+
+	// Advance to index 2 (before the alert at index 4).
+	for range 3 {
+		_, _ = ctrl.StepForward()
+	}
+
+	err := ctrl.JumpToPrevAlert()
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}

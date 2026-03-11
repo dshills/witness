@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -12,6 +13,9 @@ import (
 const (
 	fullLayoutMinCols = 100
 	fullLayoutMinRows = 28
+
+	// replayBarHeight is the number of lines the replay control bar uses.
+	replayBarHeight = 2
 )
 
 // App is the root Bubble Tea model that owns and arranges all panels.
@@ -23,6 +27,11 @@ type App struct {
 	drillDown int // -1 = dashboard, >= 0 = full-screen panel index
 	showHelp  bool
 	ready     bool
+
+	// Replay mode fields (nil/zero when in live mode).
+	replayCtrl   ReplayControl
+	replayCtx    context.Context
+	replayStatus ReplayStatusMsg
 }
 
 // NewApp creates a new App model with the given panels.
@@ -41,6 +50,25 @@ func NewApp(panels []Panel) App {
 		focusIdx:  focus,
 		drillDown: -1,
 	}
+}
+
+// NewReplayApp creates a new App model configured for replay mode.
+// The replay controller is used to handle replay-specific key bindings.
+func NewReplayApp(panels []Panel, ctrl ReplayControl, ctx context.Context) App {
+	app := NewApp(panels)
+	app.replayCtrl = ctrl
+	app.replayCtx = ctx
+	return app
+}
+
+// IsReplayMode returns true if the app is in replay mode.
+func (a App) IsReplayMode() bool {
+	return a.replayCtrl != nil
+}
+
+// ReplayStatus returns the current replay status for testing.
+func (a App) ReplayStatus() ReplayStatusMsg {
+	return a.replayStatus
 }
 
 func (a App) Init() tea.Cmd {
@@ -75,6 +103,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return a, tea.Batch(cmds...)
+
+	case ReplayStatusMsg:
+		a.replayStatus = m
+		return a, nil
 	}
 
 	// Forward other messages to focused panel.
@@ -114,6 +146,13 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// Replay-mode key bindings (checked before drill-down shortcuts to avoid conflicts).
+	if a.replayCtrl != nil {
+		if handled, model, cmd := a.handleReplayKey(msg); handled {
+			return model, cmd
+		}
+	}
+
 	// Tab / shift-tab for focus cycling.
 	if msg.String() == keyTab {
 		a.advanceFocus(1)
@@ -139,6 +178,66 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return a, nil
+}
+
+// handleReplayKey processes replay-specific key bindings.
+// Returns (handled, model, cmd). If handled is false, the key should be
+// processed by normal key handling.
+func (a App) handleReplayKey(msg tea.KeyMsg) (bool, tea.Model, tea.Cmd) {
+	ctrl := a.replayCtrl
+	k := msg.String()
+
+	switch k {
+	case keySpace:
+		if ctrl.IsPlaying() {
+			ctrl.Pause()
+		} else {
+			ctrl.Play(a.replayCtx)
+		}
+		return true, a, nil
+
+	case keyRight, keyL:
+		ctrl.Pause()
+		_, _ = ctrl.StepForward()
+		return true, a, nil
+
+	case keyLeft, keyH:
+		ctrl.Pause()
+		_ = ctrl.StepBackward()
+		return true, a, nil
+
+	case keyGt, keyDot:
+		newSpeed := nextSpeed(ctrl.Speed())
+		ctrl.SetSpeed(newSpeed)
+		return true, a, nil
+
+	case keyLt, keyComma:
+		newSpeed := prevSpeed(ctrl.Speed())
+		ctrl.SetSpeed(newSpeed)
+		return true, a, nil
+
+	case keyN:
+		_ = ctrl.JumpToNextStageTransition()
+		return true, a, nil
+
+	case keyShiftN:
+		_ = ctrl.JumpToPrevStageTransition()
+		return true, a, nil
+
+	case keyC:
+		_ = ctrl.JumpToNextCommit()
+		return true, a, nil
+
+	case keyShiftC:
+		_ = ctrl.JumpToPrevCommit()
+		return true, a, nil
+
+	case keyShiftA:
+		_ = ctrl.JumpToNextAlert()
+		return true, a, nil
+	}
+
+	return false, a, nil
 }
 
 func (a *App) advanceFocus(dir int) {
@@ -180,11 +279,25 @@ func (a App) View() string {
 	return view
 }
 
+// replayBarLines returns the number of lines reserved for the replay bar.
+func (a App) replayBarLines() int {
+	if a.replayCtrl != nil {
+		return replayBarHeight
+	}
+	return 0
+}
+
 func (a App) drillDownView() string {
 	p := a.panels[a.drillDown]
 	title := panelTitleBar(p.Title(), a.width, a.drillDown == a.focusIdx)
-	content := p.View(a.width, a.height-2)
-	return title + "\n" + content + "\n" + padToWidth(" ESC to return", a.width)
+	contentHeight := a.height - 2 - a.replayBarLines()
+	content := p.View(a.width, contentHeight)
+	footer := padToWidth(" ESC to return", a.width)
+
+	if a.replayCtrl != nil {
+		return title + "\n" + content + "\n" + RenderReplayBar(a.replayStatus, a.width)
+	}
+	return title + "\n" + content + "\n" + footer
 }
 
 func (a App) fullLayout() string {
@@ -195,8 +308,8 @@ func (a App) fullLayout() string {
 	b.WriteString(header)
 	b.WriteByte('\n')
 
-	// Calculate available height after header.
-	bodyHeight := a.height - 2 // header + bottom status
+	// Calculate available height after header and replay bar.
+	bodyHeight := a.height - 2 - a.replayBarLines() // header + bottom status/bar
 
 	// Split columns.
 	leftWidth := a.width * 40 / 100
@@ -250,6 +363,12 @@ func (a App) fullLayout() string {
 	b.WriteString(panelTitleBar(a.panels[panelEventStream].Title(), a.width, a.focusIdx == panelEventStream))
 	b.WriteByte('\n')
 	b.WriteString(a.panels[panelEventStream].View(a.width, streamHeight))
+
+	// Replay control bar at the bottom.
+	if a.replayCtrl != nil {
+		b.WriteByte('\n')
+		b.WriteString(RenderReplayBar(a.replayStatus, a.width))
+	}
 
 	return b.String()
 }
@@ -308,7 +427,7 @@ func (a App) compactLayout() string {
 	b.WriteString(a.panels[panelHeader].View(a.width, 1))
 	b.WriteByte('\n')
 
-	available := a.height - 2 // header + bottom
+	available := a.height - 2 - a.replayBarLines() // header + bottom
 
 	// ActiveWork (compact).
 	awHeight := 4
@@ -341,11 +460,17 @@ func (a App) compactLayout() string {
 		b.WriteString(a.panels[panelEventStream].View(a.width, available-1))
 	}
 
+	// Replay control bar at the bottom.
+	if a.replayCtrl != nil {
+		b.WriteByte('\n')
+		b.WriteString(RenderReplayBar(a.replayStatus, a.width))
+	}
+
 	return b.String()
 }
 
 func (a App) overlayHelp(base string) string {
-	help := helpText()
+	help := a.helpTextForMode()
 	helpStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		Padding(1, 2).
@@ -364,6 +489,14 @@ func (a App) overlayHelp(base string) string {
 	}
 
 	return placeOverlay(base, rendered, x, y, a.width, a.height)
+}
+
+// helpTextForMode returns help text appropriate for the current mode.
+func (a App) helpTextForMode() string {
+	if a.replayCtrl != nil {
+		return replayHelpText()
+	}
+	return helpText()
 }
 
 // Width returns the current terminal width.
@@ -419,6 +552,36 @@ p            Pause event stream
 r            Resume live tail
 /            Filter events
 esc          Close filter / exit drill-down
+?            Toggle this help
+
+Drill-down (full-screen):
+s            Stages
+t            Tokens / Cost
+g            Git / Files
+a            Alerts
+e            Event stream
+m            Model / Active work`
+}
+
+func replayHelpText() string {
+	return `Replay Keyboard Shortcuts
+-------------------------
+q / ctrl+c   Quit
+space        Play / pause
+right / l    Step forward
+left / h     Step backward
+> / .        Increase speed
+< / ,        Decrease speed
+n            Next stage transition
+N            Previous stage transition
+c            Next commit
+C            Previous commit
+A            Next alert
+tab          Focus next panel
+shift+tab    Focus previous panel
+j / down     Scroll down
+k / up       Scroll up
+esc          Exit drill-down
 ?            Toggle this help
 
 Drill-down (full-screen):

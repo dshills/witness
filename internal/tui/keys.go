@@ -23,6 +23,22 @@ const (
 	keyE        = "e"
 	keyM        = "m"
 	keyCtrlC    = "ctrl+c"
+
+	// Replay mode keys.
+	keySpace  = " "
+	keyRight  = "right"
+	keyLeft   = "left"
+	keyL      = "l"
+	keyH      = "h"
+	keyDot    = "."
+	keyComma  = ","
+	keyGt     = ">"
+	keyLt     = "<"
+	keyN      = "n"
+	keyShiftN = "N"
+	keyC      = "c"
+	keyShiftC = "C"
+	keyShiftA = "A"
 )
 
 // isQuit returns true if the key message represents a quit action.

@@ -299,30 +299,9 @@ func (c *Controller) JumpToNextCommit() error {
 // JumpToPrevStageTransition jumps to the most recent stage transition event
 // before the current index.
 func (c *Controller) JumpToPrevStageTransition() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	searchEnd := c.index
-	if searchEnd < 0 {
-		return ErrNotFound
-	}
-
-	targetIdx := -1
-	for i := searchEnd - 1; i >= 0; i-- {
-		if isStageTransition(c.events[i].Type) {
-			targetIdx = i
-			break
-		}
-	}
-
-	if targetIdx < 0 {
-		return ErrNotFound
-	}
-
-	c.rebuildTo(targetIdx)
-	c.sendUpdate()
-
-	return nil
+	return c.jumpToPrevByType(func(et events.EventType) bool {
+		return isStageTransition(et)
+	})
 }
 
 // CurrentEvent returns the event at the current index, or nil if before start.
@@ -357,6 +336,29 @@ func (c *Controller) IsPlaying() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.playing
+}
+
+// Speed returns the current playback speed multiplier.
+func (c *Controller) Speed() float64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.speed
+}
+
+// JumpToPrevCommit jumps to the most recent git.commit.created event
+// before the current index.
+func (c *Controller) JumpToPrevCommit() error {
+	return c.jumpToPrevByType(func(et events.EventType) bool {
+		return et == events.EventGitCommitCreated
+	})
+}
+
+// JumpToPrevAlert jumps to the most recent alert.raised event
+// before the current index.
+func (c *Controller) JumpToPrevAlert() error {
+	return c.jumpToPrevByType(func(et events.EventType) bool {
+		return et == events.EventAlertRaised
+	})
 }
 
 // Updates returns a channel that receives state updates during playback.
@@ -412,6 +414,34 @@ func (c *Controller) jumpToNextByType(match func(events.EventType) bool) error {
 	}
 
 	return ErrNotFound
+}
+
+// jumpToPrevByType finds the most recent event matching the predicate before current index.
+func (c *Controller) jumpToPrevByType(match func(events.EventType) bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	searchEnd := c.index
+	if searchEnd < 0 {
+		return ErrNotFound
+	}
+
+	targetIdx := -1
+	for i := searchEnd - 1; i >= 0; i-- {
+		if match(c.events[i].Type) {
+			targetIdx = i
+			break
+		}
+	}
+
+	if targetIdx < 0 {
+		return ErrNotFound
+	}
+
+	c.rebuildTo(targetIdx)
+	c.sendUpdate()
+
+	return nil
 }
 
 // isStageTransition returns true if the event type is a stage lifecycle event.
