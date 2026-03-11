@@ -1,6 +1,6 @@
 # Operational Runbook: specs
 
-> **Generated:** 2026-03-11T16:45:37Z
+> **Generated:** 2026-03-11T17:02:36Z
 > **Schema Version:** 1.0
 > **Project Root:** `/Users/dshills/Development/projects/witness/specs`
 
@@ -24,7 +24,7 @@ This runbook was generated from a fact model that contains **no detected compone
 8. [Logging](#8-logging)
 9. [Monitoring & Alerts](#9-monitoring--alerts)
 10. [Common Failure Scenarios](#10-common-failure-scenarios)
-11. [Escalation Path](#11-escalation-path)
+11. [Escalation Contacts](#11-escalation-contacts)
 
 ---
 
@@ -33,124 +33,140 @@ This runbook was generated from a fact model that contains **no detected compone
 | Field | Value |
 |---|---|
 | **Service Name** | specs |
-| **Project Path** | `/Users/dshills/Development/projects/witness/specs` |
-| **Languages** | UNKNOWN *(no languages detected in fact model)* |
-| **Purpose / Description** | UNKNOWN |
+| **Project Root** | `/Users/dshills/Development/projects/witness/specs` |
+| **Primary Language(s)** | UNKNOWN — no languages detected in fact model |
+| **Runtime** | UNKNOWN |
+| **Deployment Target** | UNKNOWN |
+| **Service Type** | UNKNOWN |
 | **Owner / Team** | UNKNOWN |
-| **On-Call Rotation** | UNKNOWN |
-| **Deployment Environment** | UNKNOWN |
-| **Service Tier / Criticality** | UNKNOWN |
+| **Repository URL** | UNKNOWN |
+| **Point of Contact** | UNKNOWN |
 
 ---
 
 ## 2. Prerequisites
 
-> No entrypoints, runtimes, or build tooling were detected in the fact model. The following prerequisites must be verified manually.
+> ⚠️ No entrypoints or languages were detected. The prerequisites below are placeholders and must be verified.
 
-- [ ] **Runtime installed:** UNKNOWN *(e.g., Go 1.xx, Node 20.x, Python 3.x)*
-- [ ] **Build tooling available:** UNKNOWN *(e.g., `make`, `go build`, `npm`, `pip`)*
-- [ ] **Access to required secrets store:** UNKNOWN *(e.g., Vault, AWS Secrets Manager)*
-- [ ] **Network access to all external dependencies:** See [Section 4](#4-external-dependencies)
-- [ ] **Sufficient disk space:** UNKNOWN
-- [ ] **Sufficient memory:** UNKNOWN
-- [ ] **Required IAM roles / service account permissions:** UNKNOWN
+- [ ] UNKNOWN runtime installed (e.g., Go, Node.js, Python, JVM — verify against source)
+- [ ] Access to all required external services (see [Section 4](#4-external-dependencies))
+- [ ] All required environment variables set (see [Section 3](#3-environment-variables))
+- [ ] Appropriate network access / firewall rules in place
+- [ ] Sufficient disk space and memory — **minimum requirements: UNKNOWN**
+- [ ] Deployment credentials / service account configured — **details: UNKNOWN**
 
 ---
 
 ## 3. Environment Variables
 
-> **No `ConfigVar` entries were detected** in the fact model. No required environment variables could be automatically derived.
+> ⚠️ No `ConfigVar` entries were detected in the fact model. No required environment variables could be automatically derived.
 
-The table below must be populated manually by inspecting the source code or existing deployment configuration.
+**Action required:** Audit the source code under `/Users/dshills/Development/projects/witness/specs` for all environment variable references and populate the table below.
 
-| Variable Name | Required | Default | Description |
-|---|---|---|---|
-| UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
+| Variable Name | Description | Required | Default | Example |
+|---|---|---|---|---|
+| UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
 
 ### 3.1 Setting Environment Variables
 
 ```bash
-# Example — replace with actual variable names and values
-export VARIABLE_NAME="value"
+# Template — replace variable names and values before use
+export UNKNOWN_VAR="value"
 ```
 
-> **Security Note:** Never commit secret values to source control. Use a secrets manager or an `.env` file excluded from version control.
+For secrets management, follow your organization's standard secrets store procedure (e.g., Vault, AWS Secrets Manager, Kubernetes Secrets). **Specific integration: UNKNOWN.**
 
 ---
 
 ## 4. External Dependencies
 
-> **No datastores or integrations were detected** in the fact model. No external dependencies could be automatically derived.
+> ⚠️ No datastores or integrations were detected in the fact model. The table below must be completed manually.
 
-The table below must be populated manually.
+| Dependency | Type | Host / Endpoint | Port | Auth Method | Required? | Notes |
+|---|---|---|---|---|---|---|
+| UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
 
-| Dependency | Type | Host / Endpoint | Port | Auth Method | Notes |
-|---|---|---|---|---|---|
-| UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
-
-### 4.1 Verifying Dependency Availability
+### 4.1 Dependency Health Verification
 
 Before starting the service, confirm all external dependencies are reachable:
 
 ```bash
 # Generic TCP connectivity check — replace HOST and PORT
-nc -zv <HOST> <PORT>
+nc -zv UNKNOWN_HOST UNKNOWN_PORT
 
-# Generic HTTP health check — replace URL
-curl -sf <DEPENDENCY_HEALTH_URL> || echo "Dependency unavailable"
+# HTTP health check — replace URL
+curl -f http://UNKNOWN_HOST:UNKNOWN_PORT/health
 ```
 
 ---
 
 ## 5. Startup Instructions
 
-> **No `package main` entrypoints or executable components were detected** in the fact model. The steps below are placeholder templates and must be replaced with verified startup commands.
+> ⚠️ No `package main` entrypoints or executable components were detected in the fact model. The steps below are generic placeholders.
 
 ### 5.1 Pre-Start Checklist
 
-- [ ] All environment variables in [Section 3](#3-environment-variables) are set
-- [ ] All external dependencies in [Section 4](#4-external-dependencies) are reachable
-- [ ] Disk and memory thresholds are within acceptable limits
-- [ ] Previous process is not already running (check for stale PID files)
+- [ ] All environment variables from [Section 3](#3-environment-variables) are exported
+- [ ] All external dependencies from [Section 4](#4-external-dependencies) are reachable
+- [ ] Previous process is not already running (check with `ps aux | grep <binary-name>`)
+- [ ] Log directory exists and is writable — **path: UNKNOWN**
+- [ ] Data directory exists and is writable — **path: UNKNOWN**
+
+### 5.2 Start the Service
 
 ```bash
-# Check for a running instance — replace PROCESS_NAME
-pgrep -fl "<PROCESS_NAME>" && echo "WARNING: process already running"
+# Step 1 — Navigate to the project root
+cd /Users/dshills/Development/projects/witness/specs
+
+# Step 2 — Set required environment variables
+# (see Section 3 — no variables were auto-detected)
+export UNKNOWN_VAR="UNKNOWN_VALUE"
+
+# Step 3 — Start the service
+# UNKNOWN — no entrypoint was detected.
+# Replace the line below with the actual start command.
+UNKNOWN_START_COMMAND
 ```
 
-### 5.2 Build (if applicable)
+### 5.3 Starting as a Background Service
 
 ```bash
-# UNKNOWN — no build commands could be derived
-# Example placeholder:
-# make build
-# go build -o ./bin/specs ./...
-```
+# systemd (Linux) — unit file name: UNKNOWN
+sudo systemctl start UNKNOWN.service
+sudo systemctl enable UNKNOWN.service   # enable on boot
 
-### 5.3 Start the Service
+# Verify it started
+sudo systemctl status UNKNOWN.service
+```
 
 ```bash
-# UNKNOWN — no entrypoints were detected
-# Example placeholder:
-# ./bin/specs
-# node dist/index.js
-# python -m specs
+# Docker — image name and tag: UNKNOWN
+docker run -d \
+  --name specs \
+  --env UNKNOWN_VAR="UNKNOWN_VALUE" \
+  -p UNKNOWN_HOST_PORT:UNKNOWN_CONTAINER_PORT \
+  UNKNOWN_IMAGE:UNKNOWN_TAG
 ```
-
-### 5.4 Verify Successful Startup
 
 ```bash
-# Confirm the process is running — replace PROCESS_NAME
-pgrep -fl "<PROCESS_NAME>"
-
-# Check startup logs for errors
-# UNKNOWN — log file path not detected
-# tail -f /var/log/specs/app.log
-
-# Confirm the service is accepting traffic
-# UNKNOWN — no port or health endpoint detected
-# curl -sf http://localhost:<PORT>/health
+# Docker Compose — compose file location: UNKNOWN
+docker compose up -d
 ```
+
+### 5.4 Confirming Successful Startup
+
+```bash
+# Check process is running — binary name: UNKNOWN
+ps aux | grep UNKNOWN_BINARY
+
+# Check listening port — port: UNKNOWN
+ss -tlnp | grep UNKNOWN_PORT
+
+# Check application health endpoint — URL: UNKNOWN
+curl -f http://localhost:UNKNOWN_PORT/UNKNOWN_HEALTH_PATH
+```
+
+Expected output on successful start: **UNKNOWN**
 
 ---
 
@@ -159,41 +175,47 @@ pgrep -fl "<PROCESS_NAME>"
 ### 6.1 Graceful Shutdown
 
 ```bash
-# Send SIGTERM to allow graceful shutdown — replace PROCESS_NAME
-pkill -SIGTERM -f "<PROCESS_NAME>"
+# systemd
+sudo systemctl stop UNKNOWN.service
 
-# Wait and confirm the process has exited
-sleep 5
-pgrep -fl "<PROCESS_NAME>" && echo "WARNING: process still running"
+# Docker
+docker stop specs
+
+# Docker Compose
+docker compose down
+
+# Direct process signal (graceful)
+kill -SIGTERM $(pgrep UNKNOWN_BINARY)
 ```
+
+> Allow up to **UNKNOWN seconds** for graceful shutdown before forcing.
 
 ### 6.2 Forced Shutdown (Last Resort)
 
 ```bash
-# Only use if graceful shutdown fails
-pkill -SIGKILL -f "<PROCESS_NAME>"
+# Force-kill the process — use only if graceful shutdown fails
+kill -SIGKILL $(pgrep UNKNOWN_BINARY)
+
+# Docker force stop
+docker kill specs
 ```
 
-> ⚠️ A forced kill may leave datastores or message queues in an inconsistent state. Verify data integrity after a forced shutdown.
-
-### 6.3 Post-Shutdown Checklist
-
-- [ ] Process is no longer running
-- [ ] No stale lock or PID files remain: UNKNOWN *(paths not detected)*
-- [ ] Downstream services notified if applicable
+> ⚠️ Forced shutdown may result in data loss or corrupted state. Verify data integrity after a forced stop.
 
 ---
 
 ## 7. Health Checks
 
-> No health check endpoints were detected in the fact model.
-
-| Check | Type | Endpoint / Command | Expected Response | Notes |
+| Check | Method | Endpoint / Command | Expected Response | Interval |
 |---|---|---|---|---|
-| Process alive | Process | `pgrep -fl <PROCESS_NAME>` | Non-zero output | UNKNOWN process name |
-| HTTP liveness | HTTP | UNKNOWN | UNKNOWN | Endpoint not detected |
-| HTTP readiness | HTTP | UNKNOWN | UNKNOWN | Endpoint not detected |
-| Dependency connectivity | Network | UNKNOWN | UNKNOWN | See Section 4 |
+| Liveness | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
+| Readiness | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
+| Dependency connectivity | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
+
+```bash
+# Manual health check — replace with actual endpoint
+curl -v http://localhost:UNKNOWN_PORT/UNKNOWN_HEALTH_PATH
+```
 
 ---
 
@@ -201,135 +223,131 @@ pkill -SIGKILL -f "<PROCESS_NAME>"
 
 | Field | Value |
 |---|---|
-| **Log format** | UNKNOWN |
-| **Log level configuration** | UNKNOWN |
-| **Log file path(s)** | UNKNOWN |
-| **Log aggregation system** | UNKNOWN |
-| **Log retention policy** | UNKNOWN |
+| **Log Format** | UNKNOWN |
+| **Log Level (default)** | UNKNOWN |
+| **Log Destination** | UNKNOWN |
+| **Log File Path** | UNKNOWN |
+| **Log Rotation Policy** | UNKNOWN |
 
-### 8.1 Tailing Logs
+### 8.1 Viewing Logs
 
 ```bash
-# Replace with actual log path or log aggregation query
-tail -f /var/log/specs/app.log
+# systemd journal
+sudo journalctl -u UNKNOWN.service -f
 
-# If using journald:
-# journalctl -u specs -f
+# Docker
+docker logs -f specs
 
-# If using Docker:
-# docker logs -f <container_name>
+# File-based logs — path: UNKNOWN
+tail -f UNKNOWN_LOG_PATH
 ```
 
-### 8.2 Searching for Errors
+### 8.2 Adjusting Log Level
 
 ```bash
-# Replace LOG_PATH with actual path
-grep -i "error\|fatal\|panic" <LOG_PATH>
+# Method: UNKNOWN
+# Replace with actual mechanism (env var, config file, signal, etc.)
+export LOG_LEVEL=debug   # example only — variable name: UNKNOWN
 ```
 
 ---
 
 ## 9. Monitoring & Alerts
 
-> No monitoring configuration was detected in the fact model. The following must be defined manually.
+> ⚠️ No monitoring configuration was detected in the fact model. All values below are UNKNOWN.
 
-| Alert Name | Condition | Severity | Response |
-|---|---|---|---|
-| UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
+| Signal | Metric / Query | Warning Threshold | Critical Threshold | Runbook Action |
+|---|---|---|---|---|
+| CPU Usage | UNKNOWN | UNKNOWN | UNKNOWN | See [Section 10](#10-common-failure-scenarios) |
+| Memory Usage | UNKNOWN | UNKNOWN | UNKNOWN | See [Section 10](#10-common-failure-scenarios) |
+| Error Rate | UNKNOWN | UNKNOWN | UNKNOWN | See [Section 10](#10-common-failure-scenarios) |
+| Latency (p99) | UNKNOWN | UNKNOWN | UNKNOWN | See [Section 10](#10-common-failure-scenarios) |
+| Dependency Availability | UNKNOWN | UNKNOWN | UNKNOWN | See [Section 10](#10-common-failure-scenarios) |
 
-### 9.1 Key Metrics to Monitor
-
-- **Process uptime:** UNKNOWN
-- **Error rate:** UNKNOWN
-- **Latency (p50 / p95 / p99):** UNKNOWN
-- **Throughput (requests/sec or jobs/sec):** UNKNOWN
-- **Datastore connection pool saturation:** UNKNOWN
-- **Memory usage:** UNKNOWN
-- **CPU usage:** UNKNOWN
-
-### 9.2 Dashboards
-
-| Dashboard | URL |
-|---|---|
-| UNKNOWN | UNKNOWN |
+**Metrics endpoint:** UNKNOWN
+**Dashboards:** UNKNOWN
+**Alerting platform:** UNKNOWN
 
 ---
 
 ## 10. Common Failure Scenarios
 
-> No components, datastores, or integrations were detected, so failure scenarios cannot be automatically derived. The entries below are generic templates.
-
----
-
 ### 10.1 Service Fails to Start
 
-**Symptoms:** Process exits immediately; no traffic served.
+**Symptoms:** Process exits immediately; no listening port.
 
-**Possible Causes:**
-- Missing or invalid environment variable
-- Port already in use
-- External dependency unreachable at startup
-
-**Resolution Steps:**
-1. Check exit code and startup logs: UNKNOWN *(log path not detected)*
-2. Verify all environment variables are set correctly (see [Section 3](#3-environment-variables))
-3. Check port availability: `lsof -i :<PORT>`
-4. Verify dependency connectivity (see [Section 4.1](#41-verifying-dependency-availability))
+**Steps:**
+1. Check logs for startup errors — see [Section 8.1](#81-viewing-logs)
+2. Verify all environment variables are set correctly — see [Section 3](#3-environment-variables)
+3. Confirm all external dependencies are reachable — see [Section 4.1](#41-dependency-health-verification)
+4. Check for port conflicts: `ss -tlnp | grep UNKNOWN_PORT`
+5. Verify file/directory permissions on `UNKNOWN_DATA_PATH`
+6. If unresolved, escalate — see [Section 11](#11-escalation-contacts)
 
 ---
 
 ### 10.2 Service Becomes Unresponsive
 
-**Symptoms:** Health check fails; requests time out.
+**Symptoms:** Health check fails; no response on service port.
 
-**Possible Causes:**
-- Deadlock or resource exhaustion
-- Downstream dependency unavailable
-- Memory or CPU saturation
-
-**Resolution Steps:**
-1. Check process health: `pgrep -fl <PROCESS_NAME>`
-2. Review recent logs for errors or panics
-3. Check system resources: `top` / `htop` / `free -m`
-4. Verify downstream dependencies are healthy (see [Section 4](#4-external-dependencies))
-5. If unrecoverable, perform graceful restart (see [Section 6](#6-shutdown-instructions) then [Section 5](#5-startup-instructions))
+**Steps:**
+1. Confirm process is still running: `ps aux | grep UNKNOWN_BINARY`
+2. Check recent logs for errors or panics — see [Section 8.1](#81-viewing-logs)
+3. Check system resource usage: `top` / `htop`
+4. Attempt graceful restart — see [Section 6.1](#61-graceful-shutdown) then [Section 5.2](#52-start-the-service)
+5. If unresolved, escalate — see [Section 11](#11-escalation-contacts)
 
 ---
 
 ### 10.3 External Dependency Unavailable
 
-**Symptoms:** UNKNOWN *(no datastores or integrations detected)*
+**Symptoms:** UNKNOWN — no datastores or integrations detected.
 
-**Resolution Steps:**
-1. Confirm the dependency is down: UNKNOWN
-2. Check whether the service has a degraded / circuit-breaker mode: UNKNOWN
-3. Notify the dependency owner: UNKNOWN
-4. Escalate if SLA is at risk (see [Section 11](#11-escalation-path))
-
----
-
-### 10.4 High Error Rate
-
-**Symptoms:** Elevated error logs; alert firing.
-
-**Resolution Steps:**
-1. Identify error type from logs
-2. Determine if errors are caused by a bad deployment — consider rollback: UNKNOWN
-3. Check for upstream traffic anomalies
-4. Escalate if root cause is not identified within UNKNOWN minutes
+**Steps:**
+1. Identify which dependency is unavailable using checks in [Section 4.1](#41-dependency-health-verification)
+2. Check the dependency's own status page or runbook — **links: UNKNOWN**
+3. Determine if the service can operate in a degraded mode — **degraded behavior: UNKNOWN**
+4. If dependency is permanently unavailable, initiate failover procedure — **procedure: UNKNOWN**
+5. Escalate if not resolved within **UNKNOWN minutes**
 
 ---
 
-## 11. Escalation Path
+### 10.4 High Memory / CPU Usage
 
-> Escalation contacts were not derivable from the fact model and must be filled in manually.
+**Symptoms:** System alerts firing; degraded response times.
 
-| Level | Role | Contact | Response Time |
+**Steps:**
+1. Identify the process consuming resources: `top -p $(pgrep UNKNOWN_BINARY)`
+2. Capture a heap/CPU profile if supported — **profiling endpoint: UNKNOWN**
+3. Check for unusual traffic patterns or runaway jobs
+4. Restart the service if resource usage is unsustainable — see [Section 6](#6-shutdown-instructions) and [Section 5](#5-startup-instructions)
+5. Escalate with captured diagnostics — see [Section 11](#11-escalation-contacts)
+
+---
+
+### 10.5 Configuration / Secret Rotation
+
+**Steps:**
+1. Update the secret or configuration value in the secrets store — **store: UNKNOWN**
+2. Re-export or inject the updated environment variable
+3. Perform a rolling restart or signal the process to reload config — **reload mechanism: UNKNOWN**
+4. Verify service health after rotation — see [Section 7](#7-health-checks)
+
+---
+
+## 11. Escalation Contacts
+
+> ⚠️ No ownership information was detected in the fact model. Populate this section before operational use.
+
+| Role | Name | Contact | Availability |
 |---|---|---|---|
-| L1 | On-Call Engineer | UNKNOWN | UNKNOWN |
-| L2 | Service Owner / Team Lead | UNKNOWN | UNKNOWN |
-| L3 | Engineering Manager | UNKNOWN | UNKNOWN |
-| Vendor | External Dependency Support | UNKNOWN | UNKNOWN |
+| Primary On-Call | UNKNOWN | UNKNOWN | UNKNOWN |
+| Secondary On-Call | UNKNOWN | UNKNOWN | UNKNOWN |
+| Service Owner | UNKNOWN | UNKNOWN | UNKNOWN |
+| Platform / Infra Team | UNKNOWN | UNKNOWN | UNKNOWN |
+
+**Incident management platform:** UNKNOWN
+**Escalation policy:** UNKNOWN
 
 ---
 
@@ -341,6 +359,5 @@ grep -i "error\|fatal\|panic" <LOG_PATH>
 | **Last Reviewed** | UNKNOWN |
 | **Next Review Due** | UNKNOWN |
 | **Maintained By** | UNKNOWN |
-| **Source Fact Model Generated At** | 2026-03-11T16:45:37Z |
 
-> This document was auto-generated from a fact model. All `UNKNOWN` fields **must be resolved** before this runbook is considered production-ready. Review this document after every significant architectural change.
+> This runbook was auto-generated from a fact model. All fields marked `UNKNOWN` **must** be resolved by the service owner before this document is considered production-ready. Re-generate this runbook whenever the service architecture changes significantly.
