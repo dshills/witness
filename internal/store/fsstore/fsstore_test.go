@@ -404,6 +404,179 @@ func TestConcurrentAppends(t *testing.T) {
 	}
 }
 
+func TestConcurrentAppendEvent_Race(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	runID := "run_race_append"
+	if err := s.CreateRun(ctx, testRun(runID)); err != nil {
+		t.Fatal(err)
+	}
+
+	const goroutines = 50
+	const eventsPerGoroutine = 10
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	// Barrier: all goroutines wait until released, then start simultaneously.
+	start := make(chan struct{})
+
+	for g := range goroutines {
+		go func(gID int) {
+			defer wg.Done()
+			<-start
+			for i := range eventsPerGoroutine {
+				evt := testEvent(runID, gID*10000+i)
+				if err := s.AppendEvent(ctx, runID, evt); err != nil {
+					t.Errorf("goroutine %d, event %d: %v", gID, i, err)
+				}
+			}
+		}(g)
+	}
+
+	close(start) // release all goroutines at once
+	wg.Wait()
+
+	evts, err := s.ReadEvents(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := goroutines * eventsPerGoroutine
+	if len(evts) != want {
+		t.Errorf("got %d events, want %d", len(evts), want)
+	}
+
+	// Verify no data corruption: every event must unmarshal cleanly with a valid EventID.
+	seen := make(map[string]struct{}, len(evts))
+	for _, evt := range evts {
+		if evt.EventID == "" {
+			t.Error("event with empty EventID indicates data corruption")
+		}
+		if _, dup := seen[evt.EventID]; dup {
+			t.Errorf("duplicate EventID %q indicates dedup failure", evt.EventID)
+		}
+		seen[evt.EventID] = struct{}{}
+	}
+}
+
+func TestDeleteRun_TableDriven(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T, s *FSStore, ctx context.Context) string
+		wantErr bool
+	}{
+		{
+			name: "successful delete with events",
+			setup: func(t *testing.T, s *FSStore, ctx context.Context) string {
+				t.Helper()
+				runID := "del_ok"
+				if err := s.CreateRun(ctx, testRun(runID)); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.AppendEvent(ctx, runID, testEvent(runID, 1)); err != nil {
+					t.Fatal(err)
+				}
+				return runID
+			},
+			wantErr: false,
+		},
+		{
+			name: "delete nonexistent run succeeds (RemoveAll is idempotent)",
+			setup: func(_ *testing.T, _ *FSStore, _ context.Context) string {
+				return "nonexistent_run_id"
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s := newTestStore(t)
+			ctx := context.Background()
+			runID := tt.setup(t, s, ctx)
+
+			err := s.DeleteRun(ctx, runID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DeleteRun() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			// After delete, the run directory should not exist.
+			if _, statErr := os.Stat(s.runDir(runID)); !os.IsNotExist(statErr) {
+				t.Error("run directory should not exist after delete")
+			}
+		})
+	}
+}
+
+func TestUpdateRun_TableDriven(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T, s *FSStore, ctx context.Context)
+		run     models.Run
+		wantErr bool
+	}{
+		{
+			name: "successful update changes status",
+			setup: func(t *testing.T, s *FSStore, ctx context.Context) {
+				t.Helper()
+				if err := s.CreateRun(ctx, testRun("upd_ok")); err != nil {
+					t.Fatal(err)
+				}
+			},
+			run: models.Run{
+				RunID:     "upd_ok",
+				Name:      "updated-name",
+				Status:    models.RunStatusCompleted,
+				StartedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantErr: false,
+		},
+		{
+			name:  "update nonexistent run fails",
+			setup: func(_ *testing.T, _ *FSStore, _ context.Context) {},
+			run: models.Run{
+				RunID:     "upd_nonexistent",
+				Name:      "ghost",
+				Status:    models.RunStatusRunning,
+				StartedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s := newTestStore(t)
+			ctx := context.Background()
+			tt.setup(t, s, ctx)
+
+			err := s.UpdateRun(ctx, tt.run)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UpdateRun() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr {
+				got, getErr := s.GetRun(ctx, tt.run.RunID)
+				if getErr != nil {
+					t.Fatalf("GetRun after update: %v", getErr)
+				}
+				if got.Name != tt.run.Name {
+					t.Errorf("Name = %q, want %q", got.Name, tt.run.Name)
+				}
+				if got.Status != tt.run.Status {
+					t.Errorf("Status = %v, want %v", got.Status, tt.run.Status)
+				}
+			}
+		})
+	}
+}
+
 func TestEnsureStorageDir(t *testing.T) {
 	dir := t.TempDir()
 	root := filepath.Join(dir, "witness-data")

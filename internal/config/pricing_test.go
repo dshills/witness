@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"fmt"
+	"sync"
+	"testing"
+)
 
 func TestEstimateCost_KnownModel(t *testing.T) {
 	// claude-sonnet-4-6: $3/M input, $15/M output
@@ -105,4 +109,67 @@ func TestEstimateCost_ZeroTokens(t *testing.T) {
 	if cost != 0 {
 		t.Errorf("zero tokens should cost 0, got %f", cost)
 	}
+}
+
+func TestEstimateCost_ConcurrentUnknownModels(t *testing.T) {
+	ResetUnknownModelWarnings()
+	t.Cleanup(ResetUnknownModelWarnings)
+
+	const goroutines = 50
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	// Barrier so all goroutines start at the same time.
+	start := make(chan struct{})
+
+	for g := range goroutines {
+		go func(gID int) {
+			defer wg.Done()
+			<-start
+			// Each goroutine calls EstimateCost with a mix of known and unknown models.
+			// Unknown models trigger writes to the shared unknownModels map.
+			model := fmt.Sprintf("unknown-model-%d", gID%10) // 10 distinct unknown models
+			cost := EstimateCost("unknown-provider", model, 1_000_000, 500_000, 0)
+			if cost != 0 {
+				t.Errorf("unknown model should return 0, got %f", cost)
+			}
+
+			// Also call with a known model to exercise the read path concurrently.
+			knownCost := EstimateCost("anthropic", "claude-sonnet-4-6", 1_000_000, 0, 0)
+			if knownCost == 0 {
+				t.Error("known model should return non-zero cost")
+			}
+		}(g)
+	}
+
+	close(start)
+	wg.Wait()
+}
+
+func TestResetUnknownModelWarnings_ConcurrentWithEstimateCost(t *testing.T) {
+	ResetUnknownModelWarnings()
+	t.Cleanup(ResetUnknownModelWarnings)
+
+	const goroutines = 30
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	start := make(chan struct{})
+
+	for g := range goroutines {
+		go func(gID int) {
+			defer wg.Done()
+			<-start
+			if gID%5 == 0 {
+				// Some goroutines reset while others write.
+				ResetUnknownModelWarnings()
+			} else {
+				model := fmt.Sprintf("race-model-%d", gID)
+				_ = EstimateCost("race-provider", model, 100, 100, 0)
+			}
+		}(g)
+	}
+
+	close(start)
+	wg.Wait()
 }

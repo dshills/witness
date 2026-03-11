@@ -132,6 +132,123 @@ func TestStoreSink_Append500_TriggersSnapshot(t *testing.T) {
 	}
 }
 
+func TestStoreSink_ConcurrentAppend(t *testing.T) {
+	st := newMemStore()
+	runID := "run_concurrent"
+	run := models.Run{RunID: runID, Status: models.RunStatusRunning, StartedAt: time.Now()}
+	agg := aggregate.NewAggregator(run)
+
+	redactor, err := privacy.NewRedactor(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sink := NewStoreSink(st, runID, agg, redactor, nil)
+	ctx := context.Background()
+
+	const goroutines = 50
+	const eventsPerGoroutine = 20
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	// Barrier so all goroutines fire simultaneously.
+	start := make(chan struct{})
+
+	for g := range goroutines {
+		go func() {
+			defer wg.Done()
+			<-start
+			for range eventsPerGoroutine {
+				evt := events.NewEvent(runID, events.EventNoteRecorded, "test", json.RawMessage(`{"note":"concurrent"}`))
+				if appendErr := sink.Append(ctx, evt); appendErr != nil {
+					t.Errorf("goroutine %d: Append error: %v", g, appendErr)
+				}
+			}
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+
+	wantTotal := int64(goroutines * eventsPerGoroutine)
+
+	// Verify Count returns the correct total.
+	if got := sink.Count(); got != wantTotal {
+		t.Errorf("Count() = %d, want %d", got, wantTotal)
+	}
+
+	// Verify the store received all events.
+	if got := st.EventCount(runID); int64(got) != wantTotal {
+		t.Errorf("store event count = %d, want %d", got, wantTotal)
+	}
+
+	// Verify the aggregator tracked all events.
+	snap := agg.Snapshot()
+	if snap.EventCount != wantTotal {
+		t.Errorf("aggregator event count = %d, want %d", snap.EventCount, wantTotal)
+	}
+}
+
+func TestStoreSink_ConcurrentAppendAndCount(t *testing.T) {
+	st := newMemStore()
+	runID := "run_append_count"
+	run := models.Run{RunID: runID, Status: models.RunStatusRunning, StartedAt: time.Now()}
+	agg := aggregate.NewAggregator(run)
+
+	redactor, err := privacy.NewRedactor(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sink := NewStoreSink(st, runID, agg, redactor, nil)
+	ctx := context.Background()
+
+	const goroutines = 30
+	const eventsPerGoroutine = 10
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines + goroutines) // writers + readers
+
+	start := make(chan struct{})
+
+	// Writer goroutines
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			<-start
+			for range eventsPerGoroutine {
+				evt := events.NewEvent(runID, events.EventNoteRecorded, "test", json.RawMessage(`{"n":1}`))
+				_ = sink.Append(ctx, evt)
+			}
+		}()
+	}
+
+	// Reader goroutines calling Count concurrently with writes
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			<-start
+			for range eventsPerGoroutine {
+				c := sink.Count()
+				// Count should never be negative or exceed the maximum possible.
+				if c < 0 || c > int64(goroutines*eventsPerGoroutine) {
+					t.Errorf("Count() returned out-of-range value: %d", c)
+				}
+			}
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+
+	// Final count must equal total events appended.
+	wantTotal := int64(goroutines * eventsPerGoroutine)
+	if got := sink.Count(); got != wantTotal {
+		t.Errorf("final Count() = %d, want %d", got, wantTotal)
+	}
+}
+
 func TestStoreSink_Redaction(t *testing.T) {
 	st := newMemStore()
 	runID := "run_redact"
