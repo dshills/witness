@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-03-11T16:26:06.910654Z",
+  "project": {
+    "name": "specs",
+    "root_path": "/Users/dshills/Development/projects/witness/specs",
+    "languages": []
+  },
+  "components": [],
+  "apis": [],
+  "datastores": [],
+  "jobs": [],
+  "integrations": [],
+  "config": [],
+  "security": {
+    "source_files": null,
+    "line_ranges": null,
+    "confidence_score": 0,
+    "inferred": false
+  }
+}
