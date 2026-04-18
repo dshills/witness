@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dshills/witness/internal/aggregate"
+	"github.com/dshills/witness/internal/config"
 	"github.com/dshills/witness/internal/events"
 	"github.com/dshills/witness/internal/models"
 	"github.com/dshills/witness/internal/privacy"
@@ -286,5 +287,62 @@ func TestStoreSink_Redaction(t *testing.T) {
 	}
 	if p["other"] != "safe value" {
 		t.Errorf("expected other field unchanged, got %q", p["other"])
+	}
+}
+
+// TESTREC-C9C57FD5: smoke test for RunSubprocess that exercises the
+// orchestrator's goroutines (ingest scanner, stdout/stderr relays, observers,
+// terminal-event emitter). The race detector (`go test -race`) will flag any
+// data race in the sync.WaitGroup / context / pipe coordination paths.
+//
+// Not run in parallel: RunSubprocess calls signal.Notify on SIGINT/SIGTERM,
+// and multiple concurrent instances would cross-wire the global signal state.
+func TestRunSubprocess(t *testing.T) {
+	st := newMemStore()
+	cfg, err := config.DefaultConfig()
+	if err != nil {
+		t.Fatalf("DefaultConfig: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	exit, err := RunSubprocess(ctx, &cfg, st, []string{"true"}, RunOptions{
+		Name:    "test-run",
+		NoGit:   true,
+		NoFiles: true,
+	})
+	if err != nil {
+		t.Fatalf("RunSubprocess: %v", err)
+	}
+	if exit != 0 {
+		t.Errorf("exit code = %d, want 0", exit)
+	}
+
+	// We expect at minimum: run.created, run.started, run.completed.
+	st.mu.Lock()
+	var total int
+	var sawCreated, sawCompleted bool
+	for _, evts := range st.events {
+		total += len(evts)
+		for _, e := range evts {
+			switch e.Type {
+			case events.EventRunCreated:
+				sawCreated = true
+			case events.EventRunCompleted:
+				sawCompleted = true
+			}
+		}
+	}
+	st.mu.Unlock()
+
+	if !sawCreated {
+		t.Error("no run.created event emitted")
+	}
+	if !sawCompleted {
+		t.Error("no run.completed event emitted")
+	}
+	if total < 3 {
+		t.Errorf("total events = %d, want >= 3", total)
 	}
 }

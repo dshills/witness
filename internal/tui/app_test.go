@@ -1,11 +1,18 @@
 package tui
 
 import (
+	"context"
+	"encoding/json"
+	"io"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/dshills/witness/internal/aggregate"
+	"github.com/dshills/witness/internal/events"
 	"github.com/dshills/witness/internal/models"
+	"github.com/dshills/witness/internal/replay"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -230,5 +237,159 @@ func TestApp_CompactLayout(t *testing.T) {
 	view := app.View()
 	if view == "" {
 		t.Error("expected non-empty view for compact layout")
+	}
+}
+
+// stateCounter is a tea.Model that counts incoming StateMsg / ReplayStatusMsg
+// messages. It lets the bridge tests verify that the goroutine actually
+// delivered state to the program without caring about rendering.
+type stateCounter struct {
+	state  *atomic.Int64
+	status *atomic.Int64
+}
+
+func (m stateCounter) Init() tea.Cmd { return nil }
+func (m stateCounter) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case StateMsg:
+		m.state.Add(1)
+	case ReplayStatusMsg:
+		m.status.Add(1)
+	case tea.QuitMsg:
+		return m, tea.Quit
+	}
+	return m, nil
+}
+func (m stateCounter) View() string { return "" }
+
+// quietProgram builds a tea.Program that produces no terminal I/O, suitable
+// for running in tests.
+func quietProgram(m tea.Model) *tea.Program {
+	return tea.NewProgram(m,
+		tea.WithInput(nil),
+		tea.WithOutput(io.Discard),
+		tea.WithoutSignals(),
+		tea.WithoutRenderer(),
+	)
+}
+
+// TESTREC-7531EB78: race-safety test for RunBridge. Feeds events from multiple
+// goroutines while the bridge drains them and forwards state to a live
+// tea.Program. Run with `go test -race`.
+func TestRunBridge(t *testing.T) {
+	t.Parallel()
+
+	var stateCount atomic.Int64
+	model := stateCounter{state: &stateCount, status: new(atomic.Int64)}
+
+	p := quietProgram(model)
+	progDone := make(chan struct{})
+	go func() {
+		_, _ = p.Run()
+		close(progDone)
+	}()
+	t.Cleanup(func() {
+		p.Quit()
+		<-progDone
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	eventCh := make(chan events.Event, 64)
+	bridgeDone := make(chan struct{})
+	go func() {
+		RunBridge(ctx, models.Run{RunID: "run_bridge_test"}, eventCh, 10, p)
+		close(bridgeDone)
+	}()
+
+	const producers = 8
+	const perProducer = 25
+	var wg sync.WaitGroup
+	wg.Add(producers)
+	for g := 0; g < producers; g++ {
+		go func(gid int) {
+			defer wg.Done()
+			for i := 0; i < perProducer; i++ {
+				eventCh <- events.NewEvent("run_bridge_test", events.EventRunStarted, "test", json.RawMessage(`{}`))
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	// Give the ticker at least a couple of windows to flush snapshots.
+	time.Sleep(50 * time.Millisecond)
+
+	close(eventCh)
+	select {
+	case <-bridgeDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("RunBridge did not return after eventCh close")
+	}
+
+	if got := stateCount.Load(); got == 0 {
+		t.Error("expected at least one StateMsg, got 0")
+	}
+}
+
+// TESTREC-F0FE62F2: race-safety test for RunReplayBridge. Drives the replay
+// Controller with StepForward calls from a goroutine while the bridge forwards
+// state to a live tea.Program. Run with `go test -race`.
+func TestRunReplayBridge(t *testing.T) {
+	t.Parallel()
+
+	run := models.Run{RunID: "run_replay_test", Status: models.RunStatusPending}
+	evts := []events.Event{
+		{EventID: "e0", RunID: run.RunID, Type: events.EventRunCreated, Timestamp: time.Now(), Source: "test", Payload: json.RawMessage(`{}`)},
+		{EventID: "e1", RunID: run.RunID, Type: events.EventRunStarted, Timestamp: time.Now(), Source: "test", Payload: json.RawMessage(`{}`)},
+		{EventID: "e2", RunID: run.RunID, Type: events.EventRunCompleted, Timestamp: time.Now(), Source: "test", Payload: json.RawMessage(`{}`)},
+	}
+	ctrl := replay.NewController(run, evts)
+
+	var stateCount, statusCount atomic.Int64
+	model := stateCounter{state: &stateCount, status: &statusCount}
+
+	p := quietProgram(model)
+	progDone := make(chan struct{})
+	go func() {
+		_, _ = p.Run()
+		close(progDone)
+	}()
+	t.Cleanup(func() {
+		p.Quit()
+		<-progDone
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	bridgeDone := make(chan struct{})
+	go func() {
+		RunReplayBridge(ctx, ctrl, 10, p)
+		close(bridgeDone)
+	}()
+
+	// Drive updates concurrently: StepForward on the controller pushes into
+	// the Updates channel, which the bridge forwards to the program.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < len(evts)-1; i++ {
+			_, _ = ctrl.StepForward()
+		}
+	}()
+	wg.Wait()
+
+	// Let the ticker fire at least once.
+	time.Sleep(30 * time.Millisecond)
+
+	cancel()
+	select {
+	case <-bridgeDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("RunReplayBridge did not return after ctx cancel")
+	}
+
+	if got := statusCount.Load(); got == 0 {
+		t.Error("expected at least one ReplayStatusMsg, got 0")
 	}
 }
