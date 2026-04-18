@@ -1,2 +1,44 @@
+# Binaries
 /witness
+/bin/
 *.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Coverage and profiling
+*.prof
+coverage.txt
+coverage.html
+coverage.out
+
+# Go workspace
+go.work
+go.work.sum
+
+# Vendor (uncomment if not vendoring)
+# vendor/
+
+# Dependency directories
+/dist/
+/build/
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+*.local
+
+# Tool state
+.claude
+.atlas
